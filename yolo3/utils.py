@@ -337,7 +337,8 @@ class ModelFactory(object):
             model_body.load_weights(self.weights_path, by_name=True)
             print('Load weights {}.'.format(self.weights_path))
         # Freeze the darknet body or freeze all but 2 output layers.
-        freeze_layers = freeze_layers or len(model_body.layers) - 3
+        #freeze_layers = freeze_layers or len(model_body.layers) - 3
+        freeze_layers = len(model_body.layers) - 3
         for i in range(freeze_layers):
             model_body.layers[i].trainable = False
         print('Freeze the first {} layers of total {} layers.'.format(

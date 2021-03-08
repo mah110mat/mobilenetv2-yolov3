@@ -49,6 +49,21 @@ class YoloModel(tf.keras.Model):
                 shape=[*input_shape, 3], batch_size=1, dtype=tf.float32),
             num_anchors=self.num_anchors // 3,
             num_classes=self.num_classes)
+        '''
+        for layer in self.model.layers : 
+            if 'batch_normalization' in layer.name:
+                print(layer.name+" : input ("+str(layer.input_shape)+") output ("+str(layer.output_shape)+")")
+        print("__") 
+        import h5py
+        with h5py.File(self.model_path, 'r') as f: 
+            for k in f.keys(): 
+                if 'batch_normalization' in k:
+                    for l in f[k].keys(): 
+                        for m in f[k][l].keys(): 
+                            print(k+ " : " + m + " : " + str(f[k][l][m].shape))
+
+        import pdb; pdb.set_trace()
+        '''
         self.model.load_weights(self.model_path)
         self.yolo_eval=YoloEval(
             self.anchors,
@@ -112,9 +127,10 @@ class YOLO(object):
             elif self.backbone == BACKBONE.EFFICIENTNET:
                 model_body = partial(
                     efficientnet_yolo_body,
+                    model_name = FLAGS['model_name'], 
                     num_anchors=num_anchors // 3,
                     num_classes=num_classes,
-                    drop_rate=0.2,
+                    #drop_rate=0.2,
                     data_format="channels_last")
 
             self.yolo_model = YoloModel(
@@ -291,27 +307,47 @@ def calculate_map(yolo, glob):
     print('mAP: ', mAP)
 
 
-def inference_img(yolo, image_path, draw=True):
+import os
+#OUTPUTS='outputs'
+def save_pred(path, output_path, boxes, scores, classes):
+    os.makedirs(output_path, exist_ok=True)
+    outfn = os.path.join(output_path, os.path.basename(path).split('.')[0])+'.txt'
+    num = len(classes)
+    with open(outfn, 'w') as fout:
+        for box, score, cls in zip(boxes, scores, classes):
+            line = '{} {} {} {} {} {}\n'.format(cls, score, box[1], box[0], box[3], box[2])
+            fout.write(line)
+    fout.close()
+
+def inference_img(yolo, image_path, output_path, draw=True):
     try:
         image = open(image_path, 'rb')
     except:
-        print('Open Error! Try again!')
+        print('Open Error! Try again! ', image_path)
     else:
         r_image = yolo.detect_image(image, draw)
-        r_image.show()
-
-
-def detect_img(yolo):
-    while True:
-        inputs = input('Input image filename:')
-        if inputs.endswith('.txt'):
-            with open(input) as file:
-                for image_path in file.readlines():
-                    image_path = image_path.strip()
-                    inference_img(yolo, image_path, False)
+        if draw:
+            r_image.show()
         else:
-            inference_img(yolo, inputs)
-    yolo.close_session()
+            save_pred(image_path, output_path, r_image[0], r_image[1], r_image[2])
+
+
+def detect_img(yolo, input_path, output_path):
+    while True:
+        if input_path is None:
+            inputs = input('Input image filename:')
+        else:
+            inputs = input_path
+        if inputs.endswith('.txt'):
+            with open(inputs) as file:
+                for image_path in file.readlines():
+                    #image_path = image_path.strip()
+                    image_path = image_path.split(' ')[0]
+                    inference_img(yolo, image_path, output_path, False)
+                break
+        else:
+            inference_img(yolo, inputs, output_path, True)
+    #yolo.close_session()
 
 
 def detect_video(yolo: YOLO, video_path: str, output_path: str = ""):
@@ -319,17 +355,20 @@ def detect_video(yolo: YOLO, video_path: str, output_path: str = ""):
     if video_path.isdigit():
         video_path_formatted = int(video_path)
     vid = cv2.VideoCapture(video_path_formatted)
+    print(video_path)
 
     if not vid.isOpened():
         raise IOError("Couldn't open webcam or video")
-    video_FourCC = int(vid.get(cv2.CAP_PROP_FOURCC))
+
+    #video_FourCC = int(vid.get(cv2.CAP_PROP_FOURCC))
+    video_FourCC = cv2.VideoWriter_fourcc(*'XVID')
     video_fps = vid.get(cv2.CAP_PROP_FPS)
     video_size = (int(vid.get(cv2.CAP_PROP_FRAME_WIDTH)),
                   int(vid.get(cv2.CAP_PROP_FRAME_HEIGHT)))
     isOutput = True if output_path != "" else False
     if isOutput:
-        print("!!! TYPE:", type(output_path), type(video_FourCC),
-              type(video_fps), type(video_size))
+        #print("!!! TYPE:", type(output_path), type(video_FourCC), type(video_fps), type(video_size))
+        print("!!! TYPE:", output_path, video_FourCC, video_fps, video_size)
         out = cv2.VideoWriter(output_path, video_FourCC, video_fps, video_size)
     accum_time = 0
     curr_fps = 0
@@ -338,15 +377,18 @@ def detect_video(yolo: YOLO, video_path: str, output_path: str = ""):
 
     trackers = {}
     font = ImageFont.truetype(font='font/FiraMono-Medium.otf', size=30)
-    thickness = 1
+    thickness = 2
     frame_count = 0
     while True:
         return_value, frame = vid.read()
+        if return_value is not True:
+            break
         image = Image.fromarray(frame)
         img_str = cv2.imencode('.jpg', np.array(image))[1].tostring()
         draw = ImageDraw.Draw(image)
-        if len(trackers) > 0:
-            for tracker in trackers:
+        #if len(trackers) > 0:
+        if False:
+            for tracker, val in list(trackers.items()):
                 success, box = tracker.update(frame)
                 if success is not True:
                     trackers.pop(tracker)
@@ -355,7 +397,8 @@ def detect_video(yolo: YOLO, video_path: str, output_path: str = ""):
                 right = left + width
                 bottom = top + height
 
-                label = '{}'.format(trackers[tracker])
+                #label = '{}'.format(trackers[tracker])
+                label = '{}'.format(val)
 
                 label_size = draw.textsize(label, font)
                 if top - label_size[1] >= 0:
@@ -385,11 +428,11 @@ def detect_video(yolo: YOLO, video_path: str, output_path: str = ""):
                 top, left, bottom, right = boxes[i]
                 height = abs(bottom - top)
                 width = abs(right - left)
-                tracker = cv2.TrackerCSRT_create()
-                #tracker = cv2.TrackerKCF_create()
-                #tracker = cv2.TrackerMOSSE_create()
-                tracker.init(frame, (left, top, width, height))
-                trackers[tracker] = predicted_class
+                #tracker = cv2.TrackerCSRT_create()
+                ##tracker = cv2.TrackerKCF_create()
+                ##tracker = cv2.TrackerMOSSE_create()
+                #tracker.init(frame, (left, top, width, height))
+                #trackers[tracker] = predicted_class
 
                 label = '{}'.format(predicted_class)
                 label_size = draw.textsize(label, font)
@@ -433,4 +476,5 @@ def detect_video(yolo: YOLO, video_path: str, output_path: str = ""):
             out.write(result)
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
-    yolo.close_session()
+    out.release()
+    #yolo.close_session()

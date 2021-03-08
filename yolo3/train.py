@@ -5,6 +5,7 @@ from __future__ import print_function
 import tensorflow as tf
 import neural_structured_learning as nsl
 import numpy as np
+from tqdm import tqdm
 
 
 class AdvLossModel(tf.keras.Model):
@@ -67,7 +68,7 @@ class AdvLossModel(tf.keras.Model):
                 tf.distribute.ReduceOp.SUM, per_replica_loss,
                 axis=None)
             num_batches += 1.0
-            tf.print(num_batches, ':', total_loss / num_batches, sep='')
+            #tf.print(num_batches, ':', total_loss / num_batches, sep='')
         total_loss = total_loss / num_batches
         return total_loss
 
@@ -109,6 +110,7 @@ class AdvLossModel(tf.keras.Model):
             logs['val_loss'] = val_loss
             for callback in callbacks:
                 callback.on_epoch_end(epoch, logs)
+            print('loss: ', train_loss.numpy(), ', val_loss: ', val_loss.numpy())
 
         for callback in callbacks:
             callback.on_train_end(logs)

@@ -23,9 +23,18 @@ def train(FLAGS):
     prune = FLAGS['prune']
     opt = FLAGS['opt']
     backbone = FLAGS['backbone']
+    try:
+        model_name = FLAGS['model_name'] 
+    except:
+        model_name = str(backbone).split('.')[1]
+    now = datetime.datetime.now()
     log_dir = os.path.join(
         'logs',
-        str(backbone).split('.')[1].lower() + '_' + str(datetime.date.today()))
+        str(model_name).lower() + '_' + 
+        now.strftime('%Y%m%d_%H%M%S')
+        )
+
+    os.makedirs(log_dir, exist_ok=True)
 
     batch_size = FLAGS['batch_size']
     train_dataset_glob = FLAGS['train_dataset']
@@ -71,7 +80,8 @@ def train(FLAGS):
     checkpoint = tf.keras.callbacks.ModelCheckpoint(os.path.join(
         log_dir, 'ep{epoch:03d}-loss{loss:.3f}-val_loss{val_loss:.3f}.h5'),
                                                     monitor='val_loss',
-                                                    save_weights_only=True,
+                                                    #save_weights_only=True,
+                                                    save_weights_only=False,
                                                     save_best_only=True,
                                                     period=3)
     cos_lr = tf.keras.callbacks.LearningRateScheduler(
@@ -111,14 +121,15 @@ def train(FLAGS):
                                   batch_norm_epsilon=1e-3,
                                   num_classes=num_classes,
                                   drop_connect_rate=0.2,
-                                  data_format="channels_first")
+                                  data_format="channels_last"
+                                  #data_format="channels_first"
+                                  )
 
     # Train with frozen layers first, to get a stable loss.
     # Adjust num epochs to your dataset. This step is enough to obtain a not bad model.
     if freeze is True:
         with strategy.scope():
-            model.compile(optimizer=tf.keras.optimizers.Adam(lr[0],
-                                                             epsilon=1e-8),
+            model.compile(optimizer=tf.keras.optimizers.Adam(lr[0], epsilon=1e-8),
                           loss=loss)
         model.fit(epochs, [checkpoint, tensorboard, tf.keras.callbacks.LearningRateScheduler(
         (lambda _, lr:lr),1)], train_dataset, val_dataset)
@@ -133,8 +144,7 @@ def train(FLAGS):
         for i in range(len(model.layers)):
             model.layers[i].trainable = True
         with strategy.scope():
-            model.compile(optimizer=tf.keras.optimizers.Adam(lr[1],
-                                                             epsilon=1e-8),
+            model.compile(optimizer=tf.keras.optimizers.Adam(lr[1], epsilon=1e-8),
                           loss=loss)  # recompile to apply the change
         print('Unfreeze all of the layers.')
         model.fit(epochs, [checkpoint, cos_lr, tensorboard, early_stopping], train_dataset,
@@ -146,3 +156,5 @@ def train(FLAGS):
                 '_trained_weights_final.h5'))
 
     # Further training if needed.
+    with open(os.path.join(log_dir, 'model_summary.txt'), 'w') as fp:
+        model.summary(print_fn=lambda x: fp.write(x + "\r\n"))

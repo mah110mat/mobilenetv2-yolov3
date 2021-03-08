@@ -28,6 +28,7 @@ flags.DEFINE_multi_integer('epochs',
                            help="Frozen train epochs and Full train epochs")
 flags.DEFINE_string('export', default='export_model/8', help="Export path")
 flags.DEFINE_string('input', default=None, help="Input data for various mode")
+flags.DEFINE_string('output', default=None, help="Output data for VIDEO mode")
 flags.DEFINE_multi_integer('input_size',
                            default=(380, 380),
                            lower_bound=0,
@@ -140,7 +141,7 @@ def main(_):
         if flags_dict['model'] is None:
             raise ValueError('Please enter your model path')
         log('Image detection mode')
-        detect_img(YOLO(flags_dict))
+        detect_img(YOLO(flags_dict), FLAGS.input, FLAGS.output)
     elif FLAGS.mode == MODE.VIDEO:
         if flags_dict['model'] is None:
             raise ValueError('Please enter your model path')

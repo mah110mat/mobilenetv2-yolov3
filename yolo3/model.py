@@ -8,8 +8,10 @@ from yolo3.utils import compose,do_giou_calculate
 from yolo3.override import mobilenet_v2
 from yolo3.darknet import DarknetConv2D_BN_Leaky, DarknetConv2D, darknet_body
 from yolo3.efficientnet import EfficientNetB4, MBConvBlock, get_model_params, BlockArgs
+from yolo3.efficientnet import EfficientNetB0
 from yolo3.train import AdvLossModel
 
+import os
 
 def make_last_layers(x, num_filters, out_filters):
     '''6 Conv2D_BN_Leaky layers followed by a Conv2D_linear layer'''
@@ -266,7 +268,16 @@ def efficientnet_yolo_body(inputs, model_name, num_anchors, **kwargs):
         channel_axis = 1
     else:
         channel_axis = -1
-    efficientnet = EfficientNetB4(include_top=False,
+
+    if model_name.lower() == 'efficientnet-b4':
+        EfficientNetBx = EfficientNetB4
+        bklayer = ['swish_65', 'swish_29']
+    elif model_name.lower() == 'efficientnet-b0':
+        EfficientNetBx = EfficientNetB0
+        bklayer = ['swish_33', 'swish_15']
+
+    efficientnet = EfficientNetBx(include_top=False,
+#    efficientnet = EfficientNetB4(include_top=False,
                                   weights='imagenet',
                                   input_shape=(input_shape, input_shape, 3),
                                   input_tensor=inputs)
@@ -293,7 +304,8 @@ def efficientnet_yolo_body(inputs, model_name, num_anchors, **kwargs):
         tf.keras.layers.UpSampling2D(2))(x)
     block_args = block_args._replace(input_filters=256)
     x = tf.keras.layers.Concatenate()(
-        [x, efficientnet.get_layer('swish_65').output])
+        [x, efficientnet.get_layer(bklayer[0]).output])
+        #[x, efficientnet.get_layer('swish_65').output])
     x, y2 = make_last_layers_efficientnet(x, block_args, global_params)
     x = compose(
         tf.keras.layers.Conv2D(128,
@@ -308,7 +320,8 @@ def efficientnet_yolo_body(inputs, model_name, num_anchors, **kwargs):
         tf.keras.layers.UpSampling2D(2))(x)
     block_args = block_args._replace(input_filters=128)
     x = tf.keras.layers.Concatenate()(
-        [x, efficientnet.get_layer('swish_29').output])
+        [x, efficientnet.get_layer(bklayer[1]).output])
+        #[x, efficientnet.get_layer('swish_29').output])
     x, y3 = make_last_layers_efficientnet(x, block_args, global_params)
     y1 = tf.keras.layers.Reshape(
         (y1.shape[1], y1.shape[2], num_anchors, num_classes + 5), name='y1')(y1)

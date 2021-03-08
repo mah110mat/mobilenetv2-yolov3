@@ -692,7 +692,8 @@ def EfficientNetB0(include_top=True,
                    input_shape=None,
                    weights=None,
                    classes=1000,
-                   pooling=None):
+                   pooling=None,
+                   input_tensor=None):
     return _get_model_by_name('efficientnet-b0',
                               include_top=include_top,
                               input_shape=input_shape,

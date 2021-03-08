@@ -1,7 +1,12 @@
 #!/usr/bin/env bash
 #	--model mobilenetv2_trained_weights_final.h5 \
-python main.py --mode TRAIN --config mobilenetv2.yaml \
-	--epochs 500 --epochs 500 \
+#OPT="--config mobilenetv2.yaml --log_directory logs "
+#OPT="--config efficientnet.yaml --log_directory logs "
+OPT="--config efficientnet-b0.yaml --log_directory logs "
+#OPT="--config darknet53.yaml --log_directory logs --model model_data/darknet53_weights.h5"
+EPOCH=300
+python main.py --mode TRAIN $OPT \
+	--epochs $EPOCH --epochs $EPOCH \
 	--log_directory logs \
 	--gpus 0 \
 	--train_dataset egohands_train_*.txt \

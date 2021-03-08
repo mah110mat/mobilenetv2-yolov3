@@ -1,0 +1,6 @@
+backbone: EFFICIENTNET
+model_name: 'efficientnet-b0'
+input_size: (224,224)
+anchors_path: 'model_data/yolo_anchors.txt'
+classes_path: 'model_data/egohands_classes.txt'
+learning_rate: [1e-3, 1e-4]
